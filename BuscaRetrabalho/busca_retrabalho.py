@@ -275,7 +275,7 @@ def main():
 
     df = read_json(json.dumps(retrabalhos_formatados))
 
-    df.to_csv(args.file_path, encoding='utf-8', index=False, sep=args.sep)
+    df.to_csv(args.file_path, encoding='utf-8', index=False, sep=args.sep, lineterminator='\n')
 
     sg.Popup(
         'Envio finalizado!',
