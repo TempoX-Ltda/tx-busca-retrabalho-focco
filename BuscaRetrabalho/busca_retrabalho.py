@@ -228,7 +228,13 @@ def main():
 
     retrabalhos_formatados = []
     
-    for retrabalho in retrabalhos:
+    for i, retrabalho in enumerate(retrabalhos):
+
+        if not sg.one_line_progress_meter(
+                            'Processando retrabalhos',
+                            i, len(retrabalhos),
+                            orientation='h'):
+            break
 
         try:
             id_ordem = re.findall(args.regex_id_ordem, retrabalho['id_ordem'])[0]
@@ -240,14 +246,38 @@ def main():
         except IndexError:
             id_unico = ''
 
+        
+        try:
+            id_ordem_sem_ord = int(id_ordem[3:])
+        except ValueError:
+            id_ordem_sem_ord = None
+
+        desc_mp: str     = None
+        material_mp: str = None
+
+        if id_ordem_sem_ord:
+            try:
+                res_ord_mat = s.get(url=urljoin(args.host, f'/focco/ordem/{id_ordem_sem_ord}/material'),)
+                res_ord_mat.raise_for_status()
+            except HTTPError:
+                sg.Popup(
+                    f'Houve um erro ao buscar na FOCCO o material da ordem "{id_ordem_sem_ord}"',
+                    'Essa ordem irá ser inserida no csv com as informações de material faltando.',
+                    title='Erro ao buscar material',
+                    button_type=sg.POPUP_BUTTONS_OK
+                )
+            else:
+                desc_mp     = res_ord_mat.json()['retorno']['desc_mp']
+                material_mp = res_ord_mat.json()['retorno']['material_mp']
+
         retrabalho_formatado = {
             'PLANO':         retrabalho['lote'],
-            'DESC MP':       retrabalho['descricao_material'],
+            'DESC MP':       desc_mp,
             'COD PRODUTO':   retrabalho['codigo'],
             'PRODUTO':       retrabalho['descricao'],
             'REFERENCIA':    '',
             'MATERIAL':      retrabalho['mascara'],
-            'MATERIAL MP':   '',
+            'MATERIAL MP':   material_mp,
             'LARGURA':       retrabalho['largura'],
             'LARG':          retrabalho['largura'],
             'COMPRIMENTO':   retrabalho['comprimento'],
@@ -272,6 +302,7 @@ def main():
 
         retrabalhos_formatados.append(retrabalho_formatado)
 
+    sg.one_line_progress_meter_cancel()
 
     df = read_json(json.dumps(retrabalhos_formatados))
 

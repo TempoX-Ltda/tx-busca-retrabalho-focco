@@ -1,0 +1,66 @@
+﻿//*********************************************************
+//
+// Marcos Gabriel Gevigier
+// 
+// Last Update: 05/05/2023
+//
+// - - - - - - - - - - - - - - - -
+// Macro para envio do plano de corte (layouts e dados de consumo de chapa por ordem) para o DB da TempoX
+// - - - - - - - - - - - - - - - -
+//
+//*********************************************************
+
+// TODAS AS MACROS DE ENVIO DE PLANO DE CORTE PARA AS MÁQUINAS SOLICITAM A EXECUÇÃO DESTA MACRO
+
+//-----------------------------------------------
+// LEITURA DO HOST E DAS CREDENCIAIS PARA ENVIO DO PLANO AO DB DA TEMPOX. TAMBÉM CONSTRUÇÃO DE ARGUMENTOS PARA O PROGRAMA
+//-----------------------------------------------
+credentials_file    = READ('\\172.16.0.4\ardis\ARQUIVOS ARDIS\SETTINGS\credenciaisTempoX.csv')
+host_tempox         = REPLACE(SUBFIELD(SUBFIELD(credentials_file;1;chr 10);2);chr 13;"")
+user_tempox         = REPLACE(SUBFIELD(SUBFIELD(credentials_file;2;chr 10);2);chr 13;"")
+password_tempox     = REPLACE(SUBFIELD(SUBFIELD(credentials_file;3;chr 10);2);chr 13;"")
+
+// DEMAIS VARIÁVEIS PARA A CONSTRUÇÃO DOS ARGUMENTOS PARA O PROGRAMA
+
+//DEFINE O PARÂMETRO DE FILTRO DE URGENCIA PARA O SCRIPT EM PYTHON
+FilterUrg = int(INPUT ("FILTRO DE RETRABALHO: 0-TODOS | 1-SOMENTE URGENTES | 2-EXCETO URGENTES";"0"))
+
+urgenteArg = ' '
+
+urgenteArg = ' --urgente ' if FilterUrg == 1
+
+urgenteArg = ' --nao-urgente ' if FilterUrg == 2
+
+//DEFINE A DATA INCIAL DO PERIDO A SER REPASSADO COMO PARAMETRO PARA O PYTHON
+DatIni = INPUT ("INSIRA DATA INICIAL AAAA-MM-DD HH:MM:SS";"2023-08-01 13:00:00")
+
+//DEFINE A DATA FINAL DO PERIDO A SER REPASSADO COMO PARAMETRO PARA O PYTHON
+DatFim = INPUT ("INSIRA DATA FINAL AAAA-MM-DD HH:MM:SS";"2023-08-31 14:00:00")
+
+//DEFINE O DIRETORIO DE EXPORTAÇÃO DO CSV
+PathToDir = ASKDIR("Selecione o diretório para exportar as peças de retrabalho")
+
+//DEFINE O NOME DO CSV A SER SALVO
+FileName =  INPUT("INSIRA O NOME DO ARQUIVO QUE DESEJA GERAR";"RETR_")
+
+//CHAMA O SCRIPT EM PYTHON RESPONSAVEL POR FAZER O SELECT NO BANCO E SALVAR EM CSV
+CALL('"\\172.16.0.4\ardis\ARQUIVOS ARDIS\APPs\GerarListaRetrabalho.exe"';  + " " + QUOTE(DatFim) + " " + QUOTE(PathToDir + '\' + FileName )+ " " + QUOTE(FilterUrgSTR))
+
+separator = ';'
+
+// TODOS OS ARGUMENTOS NECESSÁRIOS AO FUNCIONAMENTO DO PROGRAMA DE ENVIO DOS PLANOS
+arguments = '--host ' + host_tempox + ' -u ' + user_tempox + ' -p ' + password_tempox + ' --data-inicio ' + QUOTE(DatIni) + ' --data-fim ' + QUOTE(DatFim) + ' --file-path ' + QUOTE(PathToDir + '\' + FileName ) + ' --sep ' + QUOTE(separator) + urgenteArg
+
+
+//-----------------------------------------------
+// EXPORTAÇÃO DOS DADOS DO LAYOUT PARA O DB TEMPOX
+//-----------------------------------------------
+
+// EXPORTA OS LAYOUTS
+EXPORT('CSV_TO_TEMPOX_DB';;layouts_file_path)
+// EXPORTA OS DADOS DE CONSUMO DE CHAPA POR ORDEM
+EXPORT('CSV_TO_TEMPOX_DB_MATORD';;parts_file_path)
+
+
+// CHAMA O PROGRAMA DE ENVIO DOS PLANOS PARA O DB DA TEMPOX
+CALL("\\172.16.0.4\ardis\ARQUIVOS ARDIS\APPs\send_ardis_v1.0.3.exe"; arguments)
