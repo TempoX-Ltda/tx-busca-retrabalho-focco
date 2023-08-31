@@ -310,7 +310,7 @@ def main():
                 borda_text = f'{sum([borda_larg_1, borda_larg_2])},{sum([borda_comp_1, borda_comp_2])},BORDA'
 
 
-                tem_furacao = any([operacao.get('codigo_operacao') in ('9', '13', '37') for operacao in roteiro])
+                tem_furacao = any([operacao.get('codigo_operacao') in ('9', '11', '13', '37') for operacao in roteiro])
 
 
         retrabalho_formatado = {
