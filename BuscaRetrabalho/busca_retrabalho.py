@@ -255,7 +255,16 @@ def main():
         desc_mp: str     = None
         material_mp: str = None
 
+        borda_comp_1: bool = None
+        borda_comp_2: bool = None
+        borda_larg_1: bool = None
+        borda_larg_2: bool = None
+        borda_text: str    = None
+        tem_furacao: bool  = None
+
         if id_ordem_sem_ord:
+
+            # Busca o material da Ordem
             try:
                 res_ord_mat = s.get(url=urljoin(args.host, f'/focco/ordem/{id_ordem_sem_ord}/material'),)
                 res_ord_mat.raise_for_status()
@@ -269,6 +278,40 @@ def main():
             else:
                 desc_mp     = res_ord_mat.json()['retorno']['desc_mp']
                 material_mp = res_ord_mat.json()['retorno']['material_mp']
+
+            # Busca o roteiro da ordem
+            try:
+                res_roteiro = s.get(
+                    url=urljoin(args.host, f'/cliente/roteiro'),
+                    params={
+                        'id_ordem': id_ordem_sem_ord
+                    }
+                )
+                res_roteiro.raise_for_status()
+            except HTTPError:
+                sg.Popup(
+                    f'Houve um erro ao buscar no MES o roteiro da ordem "{id_ordem_sem_ord}"',
+                    'Essa ordem irá ser inserida no csv sem as informações de borda e furação.',
+                    title='Erro ao buscar roteiro',
+                    button_type=sg.POPUP_BUTTONS_OK
+                )
+            else:
+                roteiro: list = res_roteiro.json()['retorno']
+
+
+                borda_comp_1 = any([operacao.get('codigo_operacao') in ('5', '31') for operacao in roteiro])
+
+                borda_comp_2 = any([operacao.get('codigo_operacao') in ('6', '32') for operacao in roteiro])
+
+                borda_larg_1 = any([operacao.get('codigo_operacao') in ('7', '33') for operacao in roteiro])
+
+                borda_larg_2 = any([operacao.get('codigo_operacao') in ('8', '34') for operacao in roteiro])
+
+                borda_text = f'{sum([borda_larg_1, borda_larg_2])},{sum([borda_comp_1, borda_comp_2])},BORDA'
+
+
+                tem_furacao = any([operacao.get('codigo_operacao') in ('9', '13', '37') for operacao in roteiro])
+
 
         retrabalho_formatado = {
             'PLANO':         retrabalho['lote'],
@@ -293,8 +336,8 @@ def main():
             'PAP PLAST':     '',
             'COD MP':        '',
             'MASC ID MP':    '',
-            'BORDA':         '',
-            'FURACAO':       '',
+            'BORDA':         borda_text or '',
+            'FURACAO':       'SIM' if tem_furacao else '',
             'COD BARRA ORD': id_unico,
             'QTDE ORD':      '',
             'G TOTAL GERAL': ''
