@@ -341,7 +341,7 @@ def main():
             'COMP':          retrabalho['comprimento'],
             'QTDE PLC':      retrabalho['qtd'],
             'ORDEM':         retrabalho['num_ordem'], 
-            'COD BARRA':     retrabalho['id_ordem'],
+            'COD BARRA':     id_ordem,
             'ESPESSURA':     retrabalho['espessura'],
             'VEIO':          '',
             'ID ORD PLANO':  '',
