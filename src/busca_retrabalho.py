@@ -12,6 +12,8 @@ from datetime import datetime
 import json
 import re
 
+__version__ = '1.0.1'
+
 sg.theme('Dark Blue 3')
 
 log_file = tempfile.gettempdir() + '/busca_retrabalho.log'
@@ -35,6 +37,12 @@ logger.addHandler(stdout_handler)
 parser = ArgumentParser(
     prog='busca_retrabalho',
     description='Busca os retrabalhos lançados no sistema GTRP'
+)
+
+parser.add_argument(
+    '-v', '--version',
+    action='version',
+    version='%(prog)s ' + __version__
 )
 
 parser.add_argument(
