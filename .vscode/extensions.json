@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "mechatroner.rainbow-csv",
+        "mhutchie.git-graph",
+        "ms-python.pylint",
+        "ms-python.python"
+    ]
+}
