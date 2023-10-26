@@ -12,7 +12,7 @@ from datetime import datetime
 import json
 import re
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 sg.theme('Dark Blue 3')
 
