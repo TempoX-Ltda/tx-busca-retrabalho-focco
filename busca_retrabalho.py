@@ -236,6 +236,8 @@ def main():
                             orientation='h'):
             break
 
+        retrabalho['id_ordem'] = str(retrabalho['id_ordem']).upper()
+
         try:
             id_ordem = re.findall(args.regex_id_ordem, retrabalho['id_ordem'])[0]
         except IndexError:
@@ -271,6 +273,8 @@ def main():
             except HTTPError:
                 sg.Popup(
                     f'Houve um erro ao buscar na FOCCO o material da ordem "{id_ordem_sem_ord}"',
+                    f'Codigo: {retrabalho["codigo"]}',
+                    f'Descrição: {retrabalho["descricao"]}',
                     'Essa ordem irá ser inserida no csv com as informações de material faltando.',
                     title='Erro ao buscar material',
                     button_type=sg.POPUP_BUTTONS_OK
@@ -282,7 +286,7 @@ def main():
             # Busca o roteiro da ordem
             try:
                 res_roteiro = s.get(
-                    url=urljoin(args.host, f'/cliente/roteiro'),
+                    url=urljoin(args.host, '/cliente/roteiro'),
                     params={
                         'id_ordem': id_ordem_sem_ord
                     }
@@ -291,6 +295,8 @@ def main():
             except HTTPError:
                 sg.Popup(
                     f'Houve um erro ao buscar no MES o roteiro da ordem "{id_ordem_sem_ord}"',
+                    f'Codigo: {retrabalho["codigo"]}',
+                    f'Descrição: {retrabalho["descricao"]}',
                     'Essa ordem irá ser inserida no csv sem as informações de borda e furação.',
                     title='Erro ao buscar roteiro',
                     button_type=sg.POPUP_BUTTONS_OK
@@ -299,18 +305,18 @@ def main():
                 roteiro: list = res_roteiro.json()['retorno']
 
 
-                borda_comp_1 = any([operacao.get('codigo_operacao') in ('5', '31') for operacao in roteiro])
+                borda_comp_1 = any(operacao.get('codigo_operacao') in ('5', '31') for operacao in roteiro)
 
-                borda_comp_2 = any([operacao.get('codigo_operacao') in ('6', '32') for operacao in roteiro])
+                borda_comp_2 = any(operacao.get('codigo_operacao') in ('6', '32') for operacao in roteiro)
 
-                borda_larg_1 = any([operacao.get('codigo_operacao') in ('7', '33') for operacao in roteiro])
+                borda_larg_1 = any(operacao.get('codigo_operacao') in ('7', '33') for operacao in roteiro)
 
-                borda_larg_2 = any([operacao.get('codigo_operacao') in ('8', '34') for operacao in roteiro])
+                borda_larg_2 = any(operacao.get('codigo_operacao') in ('8', '34') for operacao in roteiro)
 
                 borda_text = f'{sum([borda_larg_1, borda_larg_2])},{sum([borda_comp_1, borda_comp_2])},BORDA'
 
 
-                tem_furacao = any([operacao.get('codigo_operacao') in ('9', '11', '13', '37') for operacao in roteiro])
+                tem_furacao = any(operacao.get('codigo_operacao') in ('9', '11', '13', '37') for operacao in roteiro)
 
 
         retrabalho_formatado = {
@@ -327,7 +333,7 @@ def main():
             'COMP':          retrabalho['comprimento'],
             'QTDE PLC':      retrabalho['qtd'],
             'ORDEM':         retrabalho['num_ordem'], 
-            'COD BARRA':     id_ordem,
+            'COD BARRA':     retrabalho['id_ordem'],
             'ESPESSURA':     retrabalho['espessura'],
             'VEIO':          '',
             'ID ORD PLANO':  '',
@@ -360,11 +366,11 @@ def main():
     )
 
 if __name__ == '__main__':
-    
+
     try:
         main()
-    except Exception as e:
-    
+    except Exception as exc:
+
         logger.exception('')
 
         sg.Popup(
@@ -375,4 +381,4 @@ if __name__ == '__main__':
             button_type=sg.POPUP_BUTTONS_OK
         )
 
-        raise SystemExit
+        raise SystemExit from exc
