@@ -12,7 +12,7 @@ from datetime import datetime
 import json
 import re
 
-__version__ = '1.0.3'
+__version__ = '1.0.4'
 
 sg.theme('Dark Blue 3')
 
@@ -143,7 +143,8 @@ def get_auth_key():
             json= {
                 "user":     args.user,
                 "password": args.password
-            }
+            },
+            timeout=10
         )
 
         login.raise_for_status()
@@ -177,9 +178,9 @@ def main():
     s.headers['Authorization'] = f"Bearer {get_auth_key()}"
 
     if args.urgente:
-        urgente = '1'
+        urgente = True
     elif args.nao_urgente:
-        urgente = '0'
+        urgente = False
     else:
         urgente = None
 
@@ -191,37 +192,62 @@ def main():
         "inativo":     False,
     }
 
-    res = s.get(
-        url=urljoin(args.host, URL_RETRABALHO),
-        params=parametros_retrabalho
-    )
+    retrabalhos = []
+    last_page = 1000
 
-    try:
-        res.raise_for_status()
-    except HTTPError as e:
+    for i in range(1000):
 
-        logger.exception('')
+        if not sg.one_line_progress_meter(
+                'Buscando retrabalhos',
+                i, last_page,
+                orientation='h'):
+            break
+
+        res = s.get(
+            url=urljoin(args.host, URL_RETRABALHO),
+            params={
+                **parametros_retrabalho,
+                "page": i,
+                "page_size": 10
+            }
+        )
 
         try:
-            mensagem = e.response.json().get('mensagem')
-        except:
-            mensagem = 'A API não enviou uma mensagem de erro, verifique os logs.'
+            res.raise_for_status()
+        except HTTPError as e:
 
-        logger.error(mensagem)
+            logger.exception('')
 
-        response = sg.Popup(
-                        'Ocorreu um erro ao buscar retrabalhos com esse parâmetros:',
-                        parametros_retrabalho,
-                        f'Log completo em: {log_file}',
-                        title='Erro ao buscar retrabalhos',
-                        button_type=sg.POPUP_BUTTONS_OK
-                    )
-        
-        raise SystemExit
-    else:
-        logger.debug(f'ok')
+            try:
+                mensagem = e.response.json().get('mensagem')
+            except:
+                mensagem = 'A API não enviou uma mensagem de erro, verifique os logs.'
 
-    retrabalhos = res.json().get('retorno')
+            logger.error(mensagem)
+
+            response = sg.Popup(
+                            'Ocorreu um erro ao buscar retrabalhos com esse parâmetros:',
+                            parametros_retrabalho,
+                            f'Log completo em: {log_file}',
+                            title='Erro ao buscar retrabalhos',
+                            button_type=sg.POPUP_BUTTONS_OK
+                        )
+            
+            raise SystemExit
+        else:
+            logger.debug(f'ok')
+
+        result = res.json()
+
+        retrabalhos = [*retrabalhos, *result.get('retorno')]
+
+        last_page = result["metadata"]["last_page"]
+
+        if not retrabalhos or last_page == None or i >= last_page:
+            break
+
+    sg.one_line_progress_meter_cancel()
+
 
     if not retrabalhos:
         sg.Popup(
@@ -285,6 +311,8 @@ def main():
                     f'Descrição: {retrabalho["descricao"]}',
                     'Essa ordem irá ser inserida no csv com as informações de material faltando.',
                     title='Erro ao buscar material',
+                    auto_close=True,
+                    auto_close_duration=5,
                     button_type=sg.POPUP_BUTTONS_OK
                 )
             else:
@@ -307,6 +335,8 @@ def main():
                     f'Descrição: {retrabalho["descricao"]}',
                     'Essa ordem irá ser inserida no csv sem as informações de borda e furação.',
                     title='Erro ao buscar roteiro',
+                    auto_close=True,
+                    auto_close_duration=5,
                     button_type=sg.POPUP_BUTTONS_OK
                 )
             else:
@@ -366,10 +396,12 @@ def main():
     df.to_csv(args.file_path, encoding='utf-8', index=False, sep=args.sep, lineterminator='\n')
 
     sg.Popup(
-        'Envio finalizado!',
+        'Download finalizado!',
         f'Lista de retrabalhos salva em: {args.file_path.name}',
         f'Log completo em: {log_file}',
-        title='Envio finalizado',
+        title='Download finalizado',
+        auto_close=True,
+        auto_close_duration=5,
         button_type=sg.POPUP_BUTTONS_OK
     )
 
@@ -383,7 +415,7 @@ if __name__ == '__main__':
 
         sg.Popup(
             'Ocorreu um erro não esperado',
-            str(e),
+            str(exc),
             f'Log completo em: {log_file}',
             title='Erro não esperado',
             button_type=sg.POPUP_BUTTONS_OK
