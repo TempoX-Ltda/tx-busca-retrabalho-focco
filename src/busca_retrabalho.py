@@ -12,7 +12,7 @@ from datetime import datetime
 import json
 import re
 
-__version__ = '1.0.4'
+__version__ = '1.0.5'
 
 sg.theme('Dark Blue 3')
 
@@ -208,7 +208,7 @@ def main():
             params={
                 **parametros_retrabalho,
                 "page": i,
-                "page_size": 10
+                "page_size": 100
             }
         )
 
