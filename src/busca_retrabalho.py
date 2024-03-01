@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional
 from requests import Session
 from requests.exceptions import HTTPError
 from argparse import ArgumentParser, FileType
@@ -172,6 +175,42 @@ def get_auth_key():
 
         raise SystemExit
 
+class TipoRetrabalho(str, Enum):
+    APROVEITAMENTO = "APROVEITAMENTO"
+    SUCATA = "SUCATA"
+    RETRABALHO_DE_BORDA = "RETRABALHO DE BORDA"
+    RETRABALHO = "RETRABALHO"
+    IMPORTACAO_MANUAL = "IMPORTACAO MANUAL"
+
+@dataclass
+class Retrabalho:
+    created_on: datetime
+    modified_on: datetime
+    id: int
+    tipo: TipoRetrabalho
+    codigo_lote: Optional[int]
+    id_ordem: int
+    id_unico_peca: Optional[int]
+    item_codigo: str
+    item_descricao: Optional[str]
+    qtd: int
+    mm_largura: Optional[int]
+    mm_comprimento: Optional[int]
+    mm_espessura: Optional[int]
+    id_setor: int
+    descricao_setor: str
+    id_recurso: int
+    apelido_recurso: str
+    id_usuario: Optional[int]
+    responsavel: Optional[str]
+    inativo: bool
+    urgente: bool
+    item_mascara: str
+    item_mascara_descricao: Optional[str]
+    motivo_retrabalho: str
+    id_turno: Optional[int]
+    descricao_turno: Optional[str]
+
 
 def main():
 
@@ -185,14 +224,14 @@ def main():
         urgente = None
 
     parametros_retrabalho = {
-        "data_inicio": args.data_inicio,
-        "data_fim":    args.data_fim,
+        "created_on_gt": args.data_inicio,
+        "created_on_lt": args.data_fim,
         "urgente":     urgente,
         "tipo":        "SUCATA",
         "inativo":     False,
     }
 
-    retrabalhos = []
+    retrabalhos: list[Retrabalho] = []
     last_page = 1000
 
     for i in range(1000):
@@ -239,7 +278,38 @@ def main():
 
         result = res.json()
 
-        retrabalhos = [*retrabalhos, *result.get('retorno')]
+        retrabalho_desta_pagina = [
+            Retrabalho(
+                apelido_recurso=r['apelido_recurso'],
+                created_on=datetime.fromisoformat(r['created_on']),
+                descricao_setor=r['descricao_setor'],
+                id=r['id'],
+                id_ordem=r['id_ordem'],
+                id_recurso=r['id_recurso'],
+                id_setor=r['id_setor'],
+                id_turno=r['id_turno'],
+                id_unico_peca=r['id_unico_peca'],
+                id_usuario=r['id_usuario'],
+                inativo=r['inativo'],
+                item_codigo=r['item_codigo'],
+                item_descricao=r['item_descricao'],
+                item_mascara=r['item_mascara'],
+                item_mascara_descricao=r['item_mascara_descricao'],
+                mm_comprimento=r['mm_comprimento'],
+                mm_espessura=r['mm_espessura'],
+                mm_largura=r['mm_largura'],
+                modified_on=datetime.fromisoformat(r['modified_on']),
+                motivo_retrabalho=r['motivo_retrabalho'],
+                qtd=r['qtd'],
+                responsavel=r['responsavel'],
+                tipo=TipoRetrabalho(r['tipo']),
+                urgente=r['urgente'],
+                codigo_lote=r['codigo_lote'],
+                descricao_turno=r['descricao_turno']
+            ) for r in result['retorno']
+        ]
+
+        retrabalhos = [*retrabalhos, *retrabalho_desta_pagina]
 
         last_page = result["metadata"]["last_page"]
 
@@ -270,24 +340,6 @@ def main():
                             orientation='h'):
             break
 
-        retrabalho['id_ordem'] = str(retrabalho['id_ordem']).upper()
-
-        try:
-            id_ordem = re.findall(args.regex_id_ordem, retrabalho['id_ordem'])[0]
-        except IndexError:
-            id_ordem = retrabalho['id_ordem']
-
-        try:
-            id_unico = re.findall(args.regex_id_unico, retrabalho['id_ordem'])[0]
-        except IndexError:
-            id_unico = ''
-
-        
-        try:
-            id_ordem_sem_ord = int(id_ordem[3:])
-        except ValueError:
-            id_ordem_sem_ord = None
-
         desc_mp: str     = None
         material_mp: str = None
 
@@ -298,91 +350,89 @@ def main():
         borda_text: str    = None
         tem_furacao: bool  = None
 
-        if id_ordem_sem_ord:
+        # Busca o material da Ordem
+        try:
+            res_ord_mat = s.get(url=urljoin(args.host, f'/focco/ordem/{retrabalho.id_ordem}/material'),)
+            res_ord_mat.raise_for_status()
+        except HTTPError:
+            sg.Popup(
+                f'Houve um erro ao buscar na FOCCO o material da ordem "{retrabalho.id_ordem}"',
+                f'Codigo: {retrabalho.item_codigo}',
+                f'Descrição: {retrabalho.item_descricao}',
+                'Essa ordem irá ser inserida no csv com as informações de material faltando.',
+                title='Erro ao buscar material',
+                auto_close=True,
+                auto_close_duration=5,
+                button_type=sg.POPUP_BUTTONS_OK
+            )
+        else:
+            desc_mp     = res_ord_mat.json()['retorno']['desc_mp']
+            material_mp = res_ord_mat.json()['retorno']['material_mp']
 
-            # Busca o material da Ordem
-            try:
-                res_ord_mat = s.get(url=urljoin(args.host, f'/focco/ordem/{id_ordem_sem_ord}/material'),)
-                res_ord_mat.raise_for_status()
-            except HTTPError:
-                sg.Popup(
-                    f'Houve um erro ao buscar na FOCCO o material da ordem "{id_ordem_sem_ord}"',
-                    f'Codigo: {retrabalho["codigo"]}',
-                    f'Descrição: {retrabalho["descricao"]}',
-                    'Essa ordem irá ser inserida no csv com as informações de material faltando.',
-                    title='Erro ao buscar material',
-                    auto_close=True,
-                    auto_close_duration=5,
-                    button_type=sg.POPUP_BUTTONS_OK
-                )
-            else:
-                desc_mp     = res_ord_mat.json()['retorno']['desc_mp']
-                material_mp = res_ord_mat.json()['retorno']['material_mp']
-
-            # Busca o roteiro da ordem
-            try:
-                res_roteiro = s.get(
-                    url=urljoin(args.host, '/cliente/roteiro'),
-                    params={
-                        'id_ordem': id_ordem_sem_ord
-                    }
-                )
-                res_roteiro.raise_for_status()
-            except HTTPError:
-                sg.Popup(
-                    f'Houve um erro ao buscar no MES o roteiro da ordem "{id_ordem_sem_ord}"',
-                    f'Codigo: {retrabalho["codigo"]}',
-                    f'Descrição: {retrabalho["descricao"]}',
-                    'Essa ordem irá ser inserida no csv sem as informações de borda e furação.',
-                    title='Erro ao buscar roteiro',
-                    auto_close=True,
-                    auto_close_duration=5,
-                    button_type=sg.POPUP_BUTTONS_OK
-                )
-            else:
-                roteiro: list = res_roteiro.json()['retorno']
+        # Busca o roteiro da ordem
+        try:
+            res_roteiro = s.get(
+                url=urljoin(args.host, '/cliente/roteiro'),
+                params={
+                    'id_ordem': retrabalho.id_ordem
+                }
+            )
+            res_roteiro.raise_for_status()
+        except HTTPError:
+            sg.Popup(
+                f'Houve um erro ao buscar no MES o roteiro da ordem "{retrabalho.id_ordem}"',
+                f'Codigo: {retrabalho.item_codigo}',
+                f'Descrição: {retrabalho.item_descricao}',
+                'Essa ordem irá ser inserida no csv sem as informações de borda e furação.',
+                title='Erro ao buscar roteiro',
+                auto_close=True,
+                auto_close_duration=5,
+                button_type=sg.POPUP_BUTTONS_OK
+            )
+        else:
+            roteiro: list = res_roteiro.json()['retorno']
 
 
-                borda_comp_1 = any(operacao.get('codigo_operacao') in ('5', '31') for operacao in roteiro)
+            borda_comp_1 = any(operacao.get('codigo_operacao') in ('5', '31') for operacao in roteiro)
 
-                borda_comp_2 = any(operacao.get('codigo_operacao') in ('6', '32') for operacao in roteiro)
+            borda_comp_2 = any(operacao.get('codigo_operacao') in ('6', '32') for operacao in roteiro)
 
-                borda_larg_1 = any(operacao.get('codigo_operacao') in ('7', '33') for operacao in roteiro)
+            borda_larg_1 = any(operacao.get('codigo_operacao') in ('7', '33') for operacao in roteiro)
 
-                borda_larg_2 = any(operacao.get('codigo_operacao') in ('8', '34') for operacao in roteiro)
+            borda_larg_2 = any(operacao.get('codigo_operacao') in ('8', '34') for operacao in roteiro)
 
-                borda_text = f'{sum([borda_larg_1, borda_larg_2])},{sum([borda_comp_1, borda_comp_2])},BORDA'
+            borda_text = f'{sum([borda_larg_1, borda_larg_2])},{sum([borda_comp_1, borda_comp_2])},BORDA'
 
 
-                tem_furacao = any(operacao.get('codigo_operacao') in ('9', '11', '13', '37') for operacao in roteiro)
+            tem_furacao = any(operacao.get('codigo_operacao') in ('9', '11', '13', '37') for operacao in roteiro)
 
 
         retrabalho_formatado = {
-            'PLANO':         retrabalho['lote'],
+            'PLANO':         str(retrabalho.codigo_lote),
             'DESC MP':       desc_mp,
-            'COD PRODUTO':   retrabalho['codigo'],
-            'PRODUTO':       retrabalho['descricao'],
+            'COD PRODUTO':   retrabalho.item_codigo,
+            'PRODUTO':       retrabalho.item_descricao,
             'REFERENCIA':    '',
-            'MATERIAL':      retrabalho['mascara'],
+            'MATERIAL':      retrabalho.item_mascara,
             'MATERIAL MP':   material_mp,
-            'LARGURA':       retrabalho['largura'],
-            'LARG':          retrabalho['largura'],
-            'COMPRIMENTO':   retrabalho['comprimento'],
-            'COMP':          retrabalho['comprimento'],
-            'QTDE PLC':      retrabalho['qtd'],
-            'ORDEM':         retrabalho['num_ordem'], 
-            'COD BARRA':     id_ordem,
-            'ESPESSURA':     retrabalho['espessura'],
+            'LARGURA':       retrabalho.mm_largura,
+            'LARG':          retrabalho.mm_largura,
+            'COMPRIMENTO':   retrabalho.mm_comprimento,
+            'COMP':          retrabalho.mm_comprimento,
+            'QTDE PLC':      retrabalho.qtd,
+            'ORDEM':         '', 
+            'COD BARRA':     retrabalho.id_ordem,
+            'ESPESSURA':     retrabalho.mm_espessura,
             'VEIO':          '',
             'ID ORD PLANO':  '',
-            'DT LOTE':       retrabalho['data'],
-            'NUM LOTE':      retrabalho['lote'],
+            'DT LOTE':       '',
+            'NUM LOTE':      str(retrabalho.codigo_lote),
             'PAP PLAST':     '',
             'COD MP':        '',
             'MASC ID MP':    '',
             'BORDA':         borda_text or '',
             'FURACAO':       'SIM' if tem_furacao else '',
-            'COD BARRA ORD': id_unico,
+            'COD BARRA ORD': str(retrabalho.id_unico_peca),
             'QTDE ORD':      '',
             'G TOTAL GERAL': ''
         }
@@ -391,7 +441,7 @@ def main():
 
     sg.one_line_progress_meter_cancel()
 
-    df = read_json(json.dumps(retrabalhos_formatados))
+    df = read_json(json.dumps(retrabalhos_formatados), dtype=None)
 
     df.to_csv(args.file_path, encoding='utf-8', index=False, sep=args.sep, lineterminator='\n')
 
