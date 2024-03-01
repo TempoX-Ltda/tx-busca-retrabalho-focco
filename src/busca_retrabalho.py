@@ -196,6 +196,11 @@ class Retrabalho:
     id_turno: Optional[int]
     descricao_turno: Optional[str]
 
+@dataclass
+class FoccoOrdemMateiralGetReturn:
+    desc_mp: str
+    material_mp: str
+    mascara_material: str
 
 def main():
 
@@ -324,8 +329,7 @@ def main():
                             orientation='h'):
             break
 
-        desc_mp: str     = None
-        material_mp: str = None
+        materialFocco: Optional[FoccoOrdemMateiralGetReturn] = None
 
         borda_comp_1: bool = None
         borda_comp_2: bool = None
@@ -350,8 +354,14 @@ def main():
                 button_type=sg.POPUP_BUTTONS_OK
             )
         else:
-            desc_mp     = res_ord_mat.json()['retorno']['desc_mp']
-            material_mp = res_ord_mat.json()['retorno']['material_mp']
+
+            retorno = res_ord_mat.json()['retorno']
+
+            materialFocco = FoccoOrdemMateiralGetReturn(
+                desc_mp=retorno['desc_mp'],
+                material_mp=retorno['material_mp'],
+                mascara_material=retorno['mascara_material']
+            )
 
         # Busca o roteiro da ordem
         try:
@@ -393,12 +403,12 @@ def main():
 
         retrabalho_formatado = {
             'PLANO':         str(retrabalho.codigo_lote) if retrabalho.codigo_lote is not None else None,
-            'DESC MP':       desc_mp,
+            'DESC MP':       materialFocco.desc_mp if materialFocco is not None else '',
             'COD PRODUTO':   retrabalho.item_codigo,
             'PRODUTO':       retrabalho.item_descricao,
             'REFERENCIA':    '',
-            'MATERIAL':      retrabalho.item_mascara,
-            'MATERIAL MP':   material_mp,
+            'MATERIAL':      materialFocco.mascara_material if materialFocco is not None else '',
+            'MATERIAL MP':   materialFocco.material_mp if materialFocco is not None else '',
             'LARGURA':       retrabalho.mm_largura,
             'LARG':          retrabalho.mm_largura,
             'COMPRIMENTO':   retrabalho.mm_comprimento,
