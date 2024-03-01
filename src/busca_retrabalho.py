@@ -13,9 +13,8 @@ import tempfile
 import sys
 from datetime import datetime
 import json
-import re
 
-__version__ = '1.0.5'
+__version__ = '1.0.6'
 
 sg.theme('Dark Blue 3')
 
@@ -95,20 +94,6 @@ parser.add_argument(
     type=str,
     help='Separador de campos do arquivo csv',
     default=','
-)
-
-parser.add_argument(
-    '--regex-id-unico',
-    type=str,
-    help='Regex que retorno id único no codigo',
-    default='#(.*)'
-)
-
-parser.add_argument(
-    '--regex-id-ordem',
-    type=str,
-    help='Regex que retorno id ordem no codigo',
-    default='(.*)#'
 )
 
 urgente_group = parser.add_mutually_exclusive_group()
