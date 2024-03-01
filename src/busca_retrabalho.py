@@ -212,7 +212,6 @@ def main():
         "created_on_gt": args.data_inicio,
         "created_on_lt": args.data_fim,
         "urgente":     urgente,
-        "tipo":        "SUCATA",
         "inativo":     False,
     }
 
@@ -393,7 +392,7 @@ def main():
 
 
         retrabalho_formatado = {
-            'PLANO':         str(retrabalho.codigo_lote),
+            'PLANO':         str(retrabalho.codigo_lote) if retrabalho.codigo_lote is not None else None,
             'DESC MP':       desc_mp,
             'COD PRODUTO':   retrabalho.item_codigo,
             'PRODUTO':       retrabalho.item_descricao,
@@ -411,7 +410,7 @@ def main():
             'VEIO':          '',
             'ID ORD PLANO':  '',
             'DT LOTE':       '',
-            'NUM LOTE':      str(retrabalho.codigo_lote),
+            'NUM LOTE':      str(retrabalho.codigo_lote) if retrabalho.codigo_lote is not None else None,
             'PAP PLAST':     '',
             'COD MP':        '',
             'MASC ID MP':    '',

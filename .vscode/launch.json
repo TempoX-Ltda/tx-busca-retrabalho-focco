@@ -10,15 +10,13 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/busca_retrabalho.py",
             "args": [
-                "--host", "http://172.16.1.16:6543/",
+                "--host", "http://172.16.0.253:6544/",
                 "-u", "admin",
                 "-p", "qwe123",
                 "--sep", ";",
-                "--data-inicio", "2023-10-26 00:00:00",
-                "--data-fim", "2023-10-26 12:00:00",
+                "--data-inicio", "2024-03-01 15:00:00",
+                "--data-fim", "2024-03-01 18:30:00",
                 "--file-path", "${workspaceFolder}/retrabalhos.csv",
-                "--regex-id-ordem", "^(ORD[0-9]*)#[0-9]*[#]?.*$",
-                "--regex-id-unico", "^ORD[0-9]*#([0-9]*)[#]?.*$"
             ],
             "console": "internalConsole",
             "justMyCode": true,
