@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 import PySimpleGUI as sg
 import tempfile
 import sys
-from datetime import datetime
+from datetime import date, datetime
 import json
 
 __version__ = '1.0.6'
@@ -202,24 +202,16 @@ class FoccoOrdemMateiralGetReturn:
     material_mp: str
     mascara_material: str
 
-def main():
+@dataclass
+class InfoOrdemFocco:
+    Numero: int
 
-    s.headers['Authorization'] = f"Bearer {get_auth_key()}"
-
-    if args.urgente:
-        urgente = True
-    elif args.nao_urgente:
-        urgente = False
-    else:
-        urgente = None
-
-    parametros_retrabalho = {
-        "created_on_gt": args.data_inicio,
-        "created_on_lt": args.data_fim,
-        "urgente":     urgente,
-        "inativo":     False,
-    }
-
+def buscaRetrabalhosDoMES(
+        created_on_gt: datetime,
+        created_on_lt: datetime,
+        urgente: Optional[bool],
+        inativo: bool
+    ):
     retrabalhos: list[Retrabalho] = []
     last_page = 1000
 
@@ -231,13 +223,18 @@ def main():
                 orientation='h'):
             break
 
+        params = {
+            "created_on_gt": created_on_gt.isoformat(),
+            "created_on_lt": created_on_lt.isoformat(),
+            "urgente": urgente,
+            "inativo": inativo,
+            "page": i,
+            "page_size": 100
+        }
+
         res = s.get(
             url=urljoin(args.host, URL_RETRABALHO),
-            params={
-                **parametros_retrabalho,
-                "page": i,
-                "page_size": 100
-            }
+            params=params
         )
 
         try:
@@ -255,7 +252,7 @@ def main():
 
             response = sg.Popup(
                             'Ocorreu um erro ao buscar retrabalhos com esse parâmetros:',
-                            parametros_retrabalho,
+                            params,
                             f'Log completo em: {log_file}',
                             title='Erro ao buscar retrabalhos',
                             button_type=sg.POPUP_BUTTONS_OK
@@ -307,17 +304,125 @@ def main():
 
     sg.one_line_progress_meter_cancel()
 
-
     if not retrabalhos:
         sg.Popup(
                 'Não foram encontrados retrabalhos com esse parâmetros:',
-                parametros_retrabalho,
+                params,
                 f'Log completo em: {log_file}',
                 title='Retrabalho não encontrado',
                 button_type=sg.POPUP_BUTTONS_OK
             )
         
         raise SystemExit
+    return retrabalhos
+
+def buscaMaterialFocco(retrabalho: Retrabalho):
+    try:
+        res_ord_mat = s.get(url=urljoin(args.host, f'/focco/ordem/{retrabalho.id_ordem}/material'),)
+        res_ord_mat.raise_for_status()
+
+        retorno = res_ord_mat.json()['retorno']
+
+        return FoccoOrdemMateiralGetReturn(
+            desc_mp=retorno['desc_mp'],
+            material_mp=retorno['material_mp'],
+            mascara_material=retorno['mascara_material']
+        )
+    except HTTPError:
+        sg.Popup(
+            f'Houve um erro ao buscar na FOCCO o material da ordem "{retrabalho.id_ordem}"',
+            f'Codigo: {retrabalho.item_codigo}',
+            f'Descrição: {retrabalho.item_descricao}',
+            'Essa ordem irá ser inserida no csv com as informações de material faltando.',
+            title='Erro ao buscar material',
+            auto_close=True,
+            auto_close_duration=5,
+            button_type=sg.POPUP_BUTTONS_OK
+        )
+
+def buscaRoteiroOrdem(retrabalho: Retrabalho):
+    try:
+        res_roteiro = s.get(
+            url=urljoin(args.host, '/cliente/roteiro'),
+            params={
+                'id_ordem': retrabalho.id_ordem
+            }
+        )
+        res_roteiro.raise_for_status()
+
+        return res_roteiro.json()['retorno']
+    
+    except HTTPError:
+        sg.Popup(
+            f'Houve um erro ao buscar no MES o roteiro da ordem "{retrabalho.id_ordem}"',
+            f'Codigo: {retrabalho.item_codigo}',
+            f'Descrição: {retrabalho.item_descricao}',
+            'Essa ordem irá ser inserida no csv sem as informações de borda e furação.',
+            title='Erro ao buscar roteiro',
+            auto_close=True,
+            auto_close_duration=5,
+            button_type=sg.POPUP_BUTTONS_OK
+        )
+
+def ordemTemFuracao(roteiro):
+    if not roteiro:
+        return False
+
+    return any(operacao.get('codigo_operacao') in ('9', '11', '13', '37') for operacao in roteiro)
+
+def textoBorda(roteiro):
+    if not roteiro:
+        return ''
+
+    borda_comp_1 = any(operacao.get('codigo_operacao') in ('5', '31') for operacao in roteiro)
+
+    borda_comp_2 = any(operacao.get('codigo_operacao') in ('6', '32') for operacao in roteiro)
+
+    borda_larg_1 = any(operacao.get('codigo_operacao') in ('7', '33') for operacao in roteiro)
+
+    borda_larg_2 = any(operacao.get('codigo_operacao') in ('8', '34') for operacao in roteiro)
+
+    return f'{sum([borda_larg_1, borda_larg_2])},{sum([borda_comp_1, borda_comp_2])},BORDA'
+
+def buscaInfoFocco(retrabalho: Retrabalho):
+    try:
+        res = s.get(url=urljoin(args.host, '/focco/consulta_ordem'),params={'id_ordem': retrabalho.id_ordem})
+        res.raise_for_status()
+
+        retorno = res.json()['retorno']
+
+        return InfoOrdemFocco(
+            Numero=retorno['Numero']
+        )
+    except HTTPError:
+        sg.Popup(
+            f'Houve um erro ao buscar na FOCCO mais informações sobre a ordem "{retrabalho.id_ordem}"',
+            f'Codigo: {retrabalho.item_codigo}',
+            f'Descrição: {retrabalho.item_descricao}',
+            'Essa ordem irá ser inserida no csv sem as informações: NUMERO DA ORDEM.',
+            title='Erro ao buscar informações da ordem',
+            auto_close=True,
+            auto_close_duration=5,
+            button_type=sg.POPUP_BUTTONS_OK
+        )
+
+def main():
+
+    s.headers['Authorization'] = f"Bearer {get_auth_key()}"
+
+    if args.urgente:
+        urgente = True
+    elif args.nao_urgente:
+        urgente = False
+    else:
+        urgente = None
+
+    retrabalhos = buscaRetrabalhosDoMES(
+        created_on_gt=args.data_inicio,
+        created_on_lt=args.data_fim,
+        urgente=urgente,
+        inativo=False
+    )    
 
     retrabalhos_formatados = []
     
@@ -329,104 +434,42 @@ def main():
                             orientation='h'):
             break
 
-        materialFocco: Optional[FoccoOrdemMateiralGetReturn] = None
+        materialFocco = buscaMaterialFocco(retrabalho)
 
-        borda_comp_1: bool = None
-        borda_comp_2: bool = None
-        borda_larg_1: bool = None
-        borda_larg_2: bool = None
-        borda_text: str    = None
-        tem_furacao: bool  = None
+        roteiro = buscaRoteiroOrdem(retrabalho)
 
-        # Busca o material da Ordem
-        try:
-            res_ord_mat = s.get(url=urljoin(args.host, f'/focco/ordem/{retrabalho.id_ordem}/material'),)
-            res_ord_mat.raise_for_status()
-        except HTTPError:
-            sg.Popup(
-                f'Houve um erro ao buscar na FOCCO o material da ordem "{retrabalho.id_ordem}"',
-                f'Codigo: {retrabalho.item_codigo}',
-                f'Descrição: {retrabalho.item_descricao}',
-                'Essa ordem irá ser inserida no csv com as informações de material faltando.',
-                title='Erro ao buscar material',
-                auto_close=True,
-                auto_close_duration=5,
-                button_type=sg.POPUP_BUTTONS_OK
-            )
-        else:
+        tem_furacao = ordemTemFuracao(roteiro)
 
-            retorno = res_ord_mat.json()['retorno']
+        borda_text = textoBorda(roteiro)
 
-            materialFocco = FoccoOrdemMateiralGetReturn(
-                desc_mp=retorno['desc_mp'],
-                material_mp=retorno['material_mp'],
-                mascara_material=retorno['mascara_material']
-            )
-
-        # Busca o roteiro da ordem
-        try:
-            res_roteiro = s.get(
-                url=urljoin(args.host, '/cliente/roteiro'),
-                params={
-                    'id_ordem': retrabalho.id_ordem
-                }
-            )
-            res_roteiro.raise_for_status()
-        except HTTPError:
-            sg.Popup(
-                f'Houve um erro ao buscar no MES o roteiro da ordem "{retrabalho.id_ordem}"',
-                f'Codigo: {retrabalho.item_codigo}',
-                f'Descrição: {retrabalho.item_descricao}',
-                'Essa ordem irá ser inserida no csv sem as informações de borda e furação.',
-                title='Erro ao buscar roteiro',
-                auto_close=True,
-                auto_close_duration=5,
-                button_type=sg.POPUP_BUTTONS_OK
-            )
-        else:
-            roteiro: list = res_roteiro.json()['retorno']
-
-
-            borda_comp_1 = any(operacao.get('codigo_operacao') in ('5', '31') for operacao in roteiro)
-
-            borda_comp_2 = any(operacao.get('codigo_operacao') in ('6', '32') for operacao in roteiro)
-
-            borda_larg_1 = any(operacao.get('codigo_operacao') in ('7', '33') for operacao in roteiro)
-
-            borda_larg_2 = any(operacao.get('codigo_operacao') in ('8', '34') for operacao in roteiro)
-
-            borda_text = f'{sum([borda_larg_1, borda_larg_2])},{sum([borda_comp_1, borda_comp_2])},BORDA'
-
-
-            tem_furacao = any(operacao.get('codigo_operacao') in ('9', '11', '13', '37') for operacao in roteiro)
-
+        info_focco = buscaInfoFocco(retrabalho)
 
         retrabalho_formatado = {
-            'PLANO':         str(retrabalho.codigo_lote) if retrabalho.codigo_lote is not None else None,
+            'PLANO':         retrabalho.codigo_lote or '',
             'DESC MP':       materialFocco.desc_mp if materialFocco is not None else '',
             'COD PRODUTO':   retrabalho.item_codigo,
-            'PRODUTO':       retrabalho.item_descricao,
+            'PRODUTO':       retrabalho.item_descricao or '',
             'REFERENCIA':    '',
             'MATERIAL':      materialFocco.mascara_material if materialFocco is not None else '',
             'MATERIAL MP':   materialFocco.material_mp if materialFocco is not None else '',
-            'LARGURA':       retrabalho.mm_largura,
-            'LARG':          retrabalho.mm_largura,
-            'COMPRIMENTO':   retrabalho.mm_comprimento,
-            'COMP':          retrabalho.mm_comprimento,
+            'LARGURA':       retrabalho.mm_largura or '',
+            'LARG':          retrabalho.mm_largura or '',
+            'COMPRIMENTO':   retrabalho.mm_comprimento or '',
+            'COMP':          retrabalho.mm_comprimento or '',
             'QTDE PLC':      retrabalho.qtd,
-            'ORDEM':         '', 
+            'ORDEM':         info_focco.Numero if info_focco is not None else '', 
             'COD BARRA':     retrabalho.id_ordem,
-            'ESPESSURA':     retrabalho.mm_espessura,
+            'ESPESSURA':     retrabalho.mm_espessura or '',
             'VEIO':          '',
             'ID ORD PLANO':  '',
             'DT LOTE':       '',
-            'NUM LOTE':      str(retrabalho.codigo_lote) if retrabalho.codigo_lote is not None else None,
+            'NUM LOTE':      retrabalho.codigo_lote or '',
             'PAP PLAST':     '',
             'COD MP':        '',
             'MASC ID MP':    '',
-            'BORDA':         borda_text or '',
+            'BORDA':         borda_text,
             'FURACAO':       'SIM' if tem_furacao else '',
-            'COD BARRA ORD': str(retrabalho.id_unico_peca),
+            'COD BARRA ORD': retrabalho.id_unico_peca or '',
             'QTDE ORD':      '',
             'G TOTAL GERAL': ''
         }
