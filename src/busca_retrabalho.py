@@ -14,7 +14,7 @@ import sys
 from datetime import date, datetime
 import json
 
-__version__ = '1.0.7'
+__version__ = '1.0.8'
 
 sg.theme('Dark Blue 3')
 
@@ -458,7 +458,7 @@ def main():
             'COMP':          retrabalho.mm_comprimento or '',
             'QTDE PLC':      retrabalho.qtd,
             'ORDEM':         info_focco.Numero if info_focco is not None else '', 
-            'COD BARRA':     'ORD' + retrabalho.id_ordem,
+            'COD BARRA':     f'ORD{retrabalho.id_ordem}',
             'ESPESSURA':     retrabalho.mm_espessura or '',
             'VEIO':          '',
             'ID ORD PLANO':  '',
