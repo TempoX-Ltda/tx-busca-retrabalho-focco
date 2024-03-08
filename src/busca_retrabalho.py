@@ -14,7 +14,7 @@ import sys
 from datetime import date, datetime
 import json
 
-__version__ = '1.0.8'
+__version__ = '1.0.9'
 
 sg.theme('Dark Blue 3')
 
@@ -228,6 +228,7 @@ def buscaRetrabalhosDoMES(
             "created_on_lt": created_on_lt.isoformat(),
             "urgente": urgente,
             "inativo": inativo,
+            "tipo": "SUCATA",
             "page": i,
             "page_size": 100
         }
